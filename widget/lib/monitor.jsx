@@ -18,7 +18,7 @@ const REFRESH_MS = 10000;                // ms between polls
 const HISTORY = 60;                      // samples kept for the graphs (60 × ~10 s ≈ 10 min)
 const STALE_MS = 35000;                  // no fresh data for this long → "offline"
 const CARD_WIDTH = 290;
-const CARD_GAP = 372;                    // vertical distance between default positions (card ≈ 354 px + gap)
+const CARD_GAP = 436;                    // vertical distance between default positions (card ≈ 420 px + gap)
 
 // green → amber → red by thresholds
 const level = (v, warn, crit) => (v >= crit ? "crit" : v >= warn ? "warn" : "ok");
@@ -143,10 +143,17 @@ const clamp = ({ x, y }) => ({
 // saved; `slot` picks a default spot so several cards don't start on top of
 // each other (slot 0 top-right, slot 1 below it, …).
 const Draggable = ({ children, header, posKey, slot }) => {
-  const defaultPos = () => ({
-    x: Math.max(16, window.innerWidth - CARD_WIDTH - 32),
-    y: 48 + slot * CARD_GAP,
-  });
+  // Cards fill the right edge top to bottom; when a column is full the next
+  // card starts a new column to the left (so no card ends up below the screen).
+  const defaultPos = () => {
+    const perColumn = Math.max(1, Math.floor((window.innerHeight - 48) / CARD_GAP));
+    const column = Math.floor(slot / perColumn);
+    const row = slot % perColumn;
+    return {
+      x: Math.max(16, window.innerWidth - 32 - CARD_WIDTH - column * (CARD_WIDTH + 16)),
+      y: 48 + row * CARD_GAP,
+    };
+  };
   const loadPos = () => {
     try {
       const p = JSON.parse(localStorage.getItem(posKey));
@@ -200,7 +207,7 @@ const Draggable = ({ children, header, posKey, slot }) => {
 // ----------------------------------------------------------------- the widget
 
 // server: folder in the project with that server's server.sh (e.g. "nl_vps")
-// label:  name shown before the first reading arrives (later: the hostname)
+// label:  name shown in the card's header
 // slot:   default position, 0 = top-right, 1 = below it, …
 export const makeWidget = ({ server, label = server, slot = 0 }) => {
   const posKey = `server-monitor:pos:${server}`;
@@ -237,7 +244,7 @@ export const makeWidget = ({ server, label = server, slot = 0 }) => {
     const header = (
       <>
         <span className="dot" style={{ background: dot }} />
-        <span className="host">{data ? data.host : label}</span>
+        <span className="host">{label}</span>
         <span className="status">{status}</span>
       </>
     );
@@ -257,6 +264,8 @@ export const makeWidget = ({ server, label = server, slot = 0 }) => {
     const loadPerCore = cpu.load[0] / cpu.cores;
     const loadColor = COLORS[level(loadPerCore, 1, 2)];
     const root = (disks || []).find((d) => d.mount === "/") || (disks || [])[0];
+    const diskColor = root && COLORS[level(root.used_pct, 80, 90)];
+    const diskFree = root && fmtBytes(root.free_bytes).split(" ");   // ["18", "GB"]: number big, unit small
 
     return (
       <Draggable header={header} posKey={posKey} slot={slot}>
@@ -270,7 +279,7 @@ export const makeWidget = ({ server, label = server, slot = 0 }) => {
           </div>
           <Spark values={history.map((s) => s.cpu)} color={cpuColor} />
           <div className="sub">
-            {cpu.cores} {cpu.cores === 1 ? "core" : "cores"} · iowait {cpu.iowait_pct.toFixed(1)}% · steal {cpu.steal_pct.toFixed(1)}%
+            {cpu.cores} {cpu.cores === 1 ? "core" : "cores"}
           </div>
         </div>
 
@@ -304,6 +313,22 @@ export const makeWidget = ({ server, label = server, slot = 0 }) => {
           </div>
         </div>
 
+        {/* DISK (the "/" partition) */}
+        {root && (
+          <div className="metric">
+            <div className="row">
+              <span className="label">Disk free</span>
+              <span className="value" style={{ color: diskColor }}>
+                {diskFree[0]}<small> {diskFree[1]}</small>
+              </span>
+            </div>
+            <Bar pct={root.used_pct} color={diskColor} />
+            <div className="sub">
+              {fmtBytes(root.used_bytes)} used of {fmtBytes(root.total_bytes)} · {root.used_pct.toFixed(0)}% full
+            </div>
+          </div>
+        )}
+
         {/* small info */}
         <div className="footer">
           {net.interface ? (
@@ -314,10 +339,7 @@ export const makeWidget = ({ server, label = server, slot = 0 }) => {
           ) : (
             <div>net n/a</div>
           )}
-          <div>
-            up <b>{fmtUptime(uptime_seconds)}</b>
-            {root && <> · disk <b>{root.used_pct.toFixed(0)}%</b> of {fmtBytes(root.total_bytes)}</>}
-          </div>
+          <div>up <b>{fmtUptime(uptime_seconds)}</b></div>
           {error && <div className="error">last poll failed: {error}</div>}
         </div>
       </Draggable>
