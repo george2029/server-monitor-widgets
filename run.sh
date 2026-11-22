@@ -16,6 +16,8 @@
 #                          keep one SSH connection open for 10 minutes and reuse
 #                          it, so each refresh skips the slow login handshake.
 set -uo pipefail
+# required for ubersicht
+export PATH="/opt/homebrew/bin:$PATH"
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
 SERVER="${1:-}"
@@ -27,8 +29,11 @@ if [ -z "$SERVER" ] || [ ! -f "$CONN" ]; then
 fi
 
 # server.sh holds one line like:  ssh -p 2222 user@host
-# Split it into words and drop the leading "ssh".
-read -r -a words < "$CONN"
+# or with a quoted option:        ssh -o "ProxyCommand=cloudflared ..." user@host
+# Split it into words the way the shell would (eval keeps "quoted parts" as
+# one word), then drop the leading "ssh".
+read -r line < "$CONN"
+eval "words=($line)"
 if [ "${words[0]:-}" != "ssh" ]; then
   echo "$CONN must contain a single 'ssh ...' command" >&2
   exit 1

@@ -1,7 +1,7 @@
-// Server monitor for the RU VM. All the logic and looks live in lib/monitor.jsx.
+// Server monitor for the VN VPS. All the logic and looks live in lib/monitor.jsx.
 import { makeWidget } from "./lib/monitor.jsx";
 
-const w = makeWidget({ server: "ru_vps", label: "RU", slot: 1 });
+const w = makeWidget({ server: "vn_vps", label: "VN", slot: 3 });
 
 export const command = w.command;
 export const refreshFrequency = w.refreshFrequency;
